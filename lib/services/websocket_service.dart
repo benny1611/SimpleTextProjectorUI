@@ -1,0 +1,181 @@
+import 'package:flutter/foundation.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:convert';
+import 'dart:async';
+
+class WebSocketService {
+
+  static WebSocketChannel? _channel;
+  static Completer<String?> completer = Completer<String?>();
+  static String? error;
+  static Timer? _timer;
+  final _storage = FlutterSecureStorage();
+  final List<Function(String)> subscribers = [];
+
+  WebSocketService._privateConstructor();
+
+  static final WebSocketService _instance = WebSocketService._privateConstructor();
+
+  factory WebSocketService() {
+    return _instance;
+  }
+
+  /// Function to login
+  ///
+  /// @username the username
+  /// @password the password
+  ///
+  /// returns (success (bool), error(String?)): success: whether the login was successful or not; error: error message, null if no error
+  Future<(bool, String?)> login(String username, String password) async {
+
+    if (_channel == null) {
+      Uri uri;
+      if(kIsWeb) {
+        const String env = String.fromEnvironment('ENV', defaultValue: 'PROD');
+        if (env == 'DEV') {
+          uri = Uri.parse("http://localhost");
+        } else {
+          uri = Uri.base;
+        }
+      } else {
+        // TODO: implement URL fetching for mobile / PC
+        uri = Uri.parse("unknown");
+      }
+
+      String hostAndPort = uri.host;
+      if(uri.hasPort) {
+        hostAndPort += ':${uri.port}';
+      }
+      _connectWebSocket(hostAndPort);
+
+      _timer ??= Timer.periodic(Duration(seconds: 5), (Timer timer) {
+        _sendPingMessage();
+      });
+    }
+
+    _sendUserAndPass(username, password);
+
+    if (! _timer!.isActive) {
+      _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
+        _sendPingMessage();
+      });
+    }
+    completer = Completer<String?>();
+
+    final timeout = Future.delayed(Duration(seconds: 1), () => null);
+    String? token = await Future.any([completer.future, timeout]);
+
+    if (token != null) {
+      _saveToken(token);
+    }
+    return (token != null, error);
+  }
+
+  // Save session token securely
+  Future<void> _saveToken(String token) async {
+    await _storage.write(key: 'session_token', value: token);  // Save token
+  }
+
+  // Retrieve session token securely
+  Future<String?> loadToken() async {
+    String? token = await _storage.read(key: 'session_token');
+    return token;
+  }
+
+  // Delete session token (for example, on logout)
+  Future<void> _deleteToken() async {
+    await _storage.delete(key: 'session_token');
+  }
+
+  void _connectWebSocket(String hostAndPort) {
+    _channel = WebSocketChannel.connect(
+      Uri.parse("ws://$hostAndPort"),
+    );
+
+    // Listen for incoming messages
+    _channel!.stream.listen((message) {
+      print("Got a message: $message");
+      try {
+        final response = jsonDecode(message);
+        if (response is Map<String, dynamic>) {
+          if (response.containsKey("session_token")) {
+            completer.complete(response["session_token"]);
+          }
+          if (response.containsKey("error")) {
+            error = response["message"];
+            if(error!.contains("session expired") || error!.contains("user not logged in")) {
+              _backToLogin();
+            }
+          }
+        }
+      } catch (e) {
+        print("Failed to decode JSON: $message");
+        print(e);
+      }
+    }, onError: (error) {
+      print("Error: $error");
+      _channel?.sink.close();
+      _channel = null;
+      _backToLogin();
+    }, onDone: () {
+      print("WebSocket closed");
+      _channel = null;
+      _backToLogin();
+    });
+  }
+
+  void _sendUserAndPass(String user, String pass) {
+    if (_channel != null) {
+      final message = {
+        "authenticate" : {
+          "user": user,
+          "password": pass
+        }
+      };
+      final String messageString = jsonEncode(message);
+      _sendMessage(messageString);
+    }
+  }
+
+  void _sendPingMessage() {
+    if (_channel != null) {
+      final message = {
+        'get': 'ping'
+      };
+
+      final jsonString = jsonEncode(message);
+      _sendMessage(jsonString);
+    }
+
+  }
+
+  void _sendMessage(String message) {
+    print("Sending: $message");
+    _channel!.sink.add(message);
+  }
+
+  void subscribe(Function(String) subscriber) {
+    subscribers.add(subscriber);
+  }
+
+  void unsubscribe(Function(String) subscriber) {
+    subscribers.remove(subscriber);
+  }
+
+  void _publishMessage(String message) {
+    for (void Function(String) sub in subscribers) {
+      sub(message);
+    }
+  }
+
+  void _backToLogin() {
+    _deleteToken();
+    final msg = {
+      "session_expired": true
+    };
+    _publishMessage(jsonEncode(msg));
+    _timer?.cancel();
+  }
+
+}

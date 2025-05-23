@@ -1,0 +1,11 @@
+{
+  "welcome": "Welcome",
+  "hello": "Hello",
+  "login": "Login",
+  "login_failed": "Login Failed",
+  "enter_text": "Enter Text",
+  "scan_qr": "Scan QR Code",
+  "invalid_credentials": "Invalid credentials",
+  "user_name": "Username",
+  "password": "Password"
+}
