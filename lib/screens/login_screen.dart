@@ -30,9 +30,6 @@ class LoginScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.login_failed)),
       );
-      //if (context.mounted) {
-
-      //}
     }
   }
 
@@ -45,6 +42,7 @@ class LoginScreen extends StatelessWidget {
     if (token != null) {
       if (token.isNotEmpty) {
         if (context.mounted) {
+          print("Going directly to welcome");
           context.go("/welcome");
         }
       }

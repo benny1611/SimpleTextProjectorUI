@@ -17,6 +17,10 @@ class WebSocketService {
 
   static final WebSocketService _instance = WebSocketService._privateConstructor();
 
+  WebSocketService.internal() {
+    _connect();
+  }
+
   factory WebSocketService() {
     return _instance;
   }
@@ -30,36 +34,13 @@ class WebSocketService {
   Future<(bool, String?)> login(String username, String password) async {
 
     if (_channel == null) {
-      Uri uri;
-      if(kIsWeb) {
-        const String env = String.fromEnvironment('ENV', defaultValue: 'PROD');
-        if (env == 'DEV') {
-          uri = Uri.parse("http://localhost");
-        } else {
-          uri = Uri.base;
-        }
-      } else {
-        // TODO: implement URL fetching for mobile / PC
-        uri = Uri.parse("unknown");
-      }
-
-      String hostAndPort = uri.host;
-      if(uri.hasPort) {
-        hostAndPort += ':${uri.port}';
-      }
-      _connectWebSocket(hostAndPort);
-
-      _timer ??= Timer.periodic(Duration(seconds: 5), (Timer timer) {
-        _sendPingMessage();
-      });
+      _connect();
     }
 
     _sendUserAndPass(username, password);
 
     if (! _timer!.isActive) {
-      _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
-        _sendPingMessage();
-      });
+      _startTimer();
     }
     completer = Completer<String?>();
 
@@ -104,8 +85,25 @@ class WebSocketService {
           }
           if (response.containsKey("error")) {
             error = response["message"];
-            if(error!.contains("session expired") || error!.contains("user not logged in")) {
-              _backToLogin();
+            if (response.containsKey("error_type")) {
+              String error_type = response["error_type"];
+              switch (error_type) {
+                case "session_error":
+                case "auth_error":
+                  _backToLogin();
+                  break;
+                case "color_error":
+                case "font_size_error":
+                case "font_error":
+                case "stream_error":
+                case "get_error":
+                case "set_error":
+                case "monitor_error":
+                case "registration_error":
+                case "text_error":
+                  // ignore
+                  break;
+              }
             }
           }
         }
@@ -122,6 +120,34 @@ class WebSocketService {
       print("WebSocket closed");
       _channel = null;
       _backToLogin();
+    });
+  }
+
+  void _connect() {
+    Uri uri;
+    if(kIsWeb) {
+      const String env = String.fromEnvironment('ENV', defaultValue: 'PROD');
+      if (env == 'DEV') {
+        uri = Uri.parse("http://localhost");
+      } else {
+        uri = Uri.base;
+      }
+    } else {
+      // TODO: implement URL fetching for mobile / PC
+      uri = Uri.parse("unknown");
+    }
+
+    String hostAndPort = uri.host;
+    if(uri.hasPort) {
+      hostAndPort += ':${uri.port}';
+    }
+    _connectWebSocket(hostAndPort);
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer ??= Timer.periodic(Duration(seconds: 5), (Timer timer) {
+      _sendPingMessage();
     });
   }
 
