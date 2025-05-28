@@ -7,6 +7,8 @@ import 'dart:convert';
 
 class WelcomeScreen extends StatefulWidget {
 
+  const WelcomeScreen({super.key});
+
   @override
   State<StatefulWidget> createState() {
     return _WelcomeScreenState();
@@ -15,7 +17,6 @@ class WelcomeScreen extends StatefulWidget {
 
 class _WelcomeScreenState extends State<WelcomeScreen> {
   BuildContext? ctx;
-  final GlobalKey _key = GlobalKey();
   static bool isSubscribed = false;
   final WebSocketService authService = WebSocketService();
 
@@ -28,29 +29,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
     super.dispose();
   }
 
-  Future<void> checkToken(BuildContext context) async {
-
-    bool isMobile;
-    try {
-      isMobile = Platform.isIOS || Platform.isAndroid;
-    } catch (e) {
-      isMobile = false;
-    }
-
-    String? token = await authService.loadToken();
-    if (token == null || token.isEmpty) {
-      if (context.mounted) {
-        if (isMobile) {
-          print("going back");
-          context.go("/");
-        } else {
-          print("going back to login");
-          context.go("/login");
-        }
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     ctx = context;
@@ -61,14 +39,46 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       print("Subscribed!");
     }
 
-    return PopScope(
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(AppLocalizations.of(context)!.welcome),
-          automaticallyImplyLeading: false,
-        ),
-        body: Center(child: Text(AppLocalizations.of(context)!.hello)),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(AppLocalizations.of(context)!.welcome),
+        automaticallyImplyLeading: false,
       ),
+      body: Center(
+        child: FutureBuilder<Size>(
+            future: authService.getScreenSize(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return CircularProgressIndicator();
+              } else if (snapshot.hasError) {
+                return Text("Error: ${snapshot.error}");
+              } else if (snapshot.hasData) {
+                final remoteSize = snapshot.data!;
+                if (remoteSize.width < 0 || remoteSize.height < 0) {
+                  return Text("Error: ${snapshot.error}");
+                } else {
+                  final Size localSize = MediaQuery.of(context).size;
+
+                  double widthScale = localSize.width / remoteSize.width;
+                  double heightScale = localSize.height / remoteSize.height;
+
+                  double scaleFactor = widthScale < heightScale ? widthScale : heightScale;
+
+                  double scaledWidth = remoteSize.width * scaleFactor;
+                  double scaledHeight = remoteSize.height * scaleFactor;
+
+                  return Container(
+                    width: scaledWidth,
+                    height: scaledHeight,
+                    color: Colors.black,
+                  );
+                }
+              } else {
+                return Text("No data");
+              }
+            }
+        )
+      )
     );
   }
 
@@ -101,6 +111,4 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
       }
     }
   }
-
-
 }

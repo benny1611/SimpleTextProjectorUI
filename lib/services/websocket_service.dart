@@ -3,6 +3,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/material.dart';
 
 class WebSocketService {
 
@@ -12,6 +13,7 @@ class WebSocketService {
   static Timer? _timer;
   final _storage = FlutterSecureStorage();
   final List<Function(String)> subscribers = [];
+  final Map<String, Completer<dynamic>> completers = {};
 
   WebSocketService._privateConstructor();
 
@@ -32,6 +34,11 @@ class WebSocketService {
   ///
   /// returns (success (bool), error(String?)): success: whether the login was successful or not; error: error message, null if no error
   Future<(bool, String?)> login(String username, String password) async {
+
+    const String env = String.fromEnvironment('ENV', defaultValue: 'PROD');
+    if (env == 'DEV-NO-LOGIN') {
+      return (true, "test");
+    }
 
     if (_channel == null) {
       _connect();
@@ -83,6 +90,19 @@ class WebSocketService {
           if (response.containsKey("session_token")) {
             completer.complete(response["session_token"]);
           }
+          List<String> keysToRemove = [];
+          for (String s in completers.keys) {
+            if (response.containsKey(s)) {
+              print("Completing...");
+              completers[s]?.complete(response);
+              keysToRemove.add(s);
+            }
+          }
+          for (String s in keysToRemove) {
+            completers.remove(s);
+          }
+          keysToRemove.clear();
+
           if (response.containsKey("error")) {
             error = response["message"];
             if (response.containsKey("error_type")) {
@@ -181,6 +201,21 @@ class WebSocketService {
     _channel!.sink.add(message);
   }
 
+  Completer<dynamic> _sendMessageAndGetCompleter(String message, String waitForKey) {
+    print("Sending and waiting: $message");
+    Completer<dynamic> cmpl = new Completer();
+    completers[waitForKey] = cmpl;
+    Future.delayed(Duration(seconds: 1), () {
+      if (!cmpl.isCompleted) {
+        cmpl.completeError('TIMEOUT');
+      }
+    });
+
+    _sendMessage(message);
+
+    return cmpl;
+  }
+
   void subscribe(Function(String) subscriber) {
     subscribers.add(subscriber);
   }
@@ -202,6 +237,27 @@ class WebSocketService {
     };
     _publishMessage(jsonEncode(msg));
     _timer?.cancel();
+  }
+
+  Future<Size> getScreenSize() async {
+    Size screenSize = Size(-1,-1);
+
+    final getScreenSizeMessage = {
+      'get': 'screen_size'
+    };
+
+    final screenSizeMessageAsJSON = jsonEncode(getScreenSizeMessage);
+
+    Completer<dynamic> compl = _sendMessageAndGetCompleter(screenSizeMessageAsJSON, "refresh_rate");
+
+    dynamic response = await compl.future;
+    if(response is Map<String, dynamic>) {
+      if (response.containsKey("width") && response.containsKey("height")) {
+        screenSize = Size(response["width"], response["height"]);
+      }
+    }
+
+    return screenSize;
   }
 
 }
