@@ -1,9 +1,13 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:simple_text_projector_ui/services/websocket_service.dart';
 import 'dart:io' show Platform;
 import 'dart:convert';
+
+import '../widgets/drawing_canvas.dart';
 
 class WelcomeScreen extends StatefulWidget {
 
@@ -62,15 +66,15 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   double widthScale = localSize.width / remoteSize.width;
                   double heightScale = localSize.height / remoteSize.height;
 
-                  double scaleFactor = widthScale < heightScale ? widthScale : heightScale;
+                  double scaleFactor = min(widthScale, heightScale);
 
                   double scaledWidth = remoteSize.width * scaleFactor;
                   double scaledHeight = remoteSize.height * scaleFactor;
 
-                  return Container(
+                  return DrawingCanvas(
                     width: scaledWidth,
                     height: scaledHeight,
-                    color: Colors.black,
+                    scaleFactor: scaleFactor
                   );
                 }
               } else {

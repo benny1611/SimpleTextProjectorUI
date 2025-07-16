@@ -27,6 +27,14 @@ class WebSocketService {
     return _instance;
   }
 
+  Future<dynamic> sendCommand(Map<String, dynamic> command, String waitForKey) async {
+    final commandAsJson = jsonEncode(command);
+
+    Completer<dynamic> compl = _sendMessageAndGetCompleter(commandAsJson, waitForKey);
+
+    return await compl.future;
+  }
+
   /// Function to login
   ///
   /// @username the username
@@ -166,7 +174,7 @@ class WebSocketService {
   }
 
   void _startTimer() {
-    _timer ??= Timer.periodic(Duration(seconds: 5), (Timer timer) {
+    _timer ??= Timer.periodic(Duration(seconds: 25), (Timer timer) {
       _sendPingMessage();
     });
   }
