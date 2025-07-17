@@ -74,7 +74,8 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                   return DrawingCanvas(
                     width: scaledWidth,
                     height: scaledHeight,
-                    scaleFactor: scaleFactor
+                    scaleFactor: scaleFactor,
+                    remoteScreenSize: remoteSize,
                   );
                 }
               } else {

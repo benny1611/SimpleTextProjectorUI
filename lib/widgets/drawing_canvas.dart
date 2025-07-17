@@ -5,11 +5,13 @@ class DrawingCanvas extends StatefulWidget {
   final double width;
   final double height;
   final double scaleFactor;
+  final Size remoteScreenSize;
 
   const DrawingCanvas({
     required this.width,
     required this.height,
     required this.scaleFactor,
+    required this.remoteScreenSize,
     super.key,
   });
 
@@ -61,7 +63,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       final realHeight = realSize.height;
 
       final realX = realBottomLeft.dx;
-      final realY = realBottomLeft.dy;
+      final realY = widget.remoteScreenSize.height - realBottomLeft.dy;
 
       print("Real rectangle:");
       print("- Top left: $realX, $realY");
